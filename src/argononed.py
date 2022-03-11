@@ -178,6 +178,9 @@ def temp_check():
 	prevspeed=0
 	while True:
 		val = argonsysinfo_gettemp()
+		hddval = argonsysinfo_gethddtemp()
+		if hddval > val:
+			val = hddval
 		newspeed = get_fanspeed(val, fanconfig)
 		if newspeed < prevspeed:
 			# Pause 30s if reduce to prevent fluctuations
