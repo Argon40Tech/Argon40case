@@ -155,10 +155,10 @@ def argonsysinfo_getip():
 
 def argonsysinfo_gethddtemp():
 	hddtemp = 0
+	storedhddtemp = 0
 	try:
 		for disk in os.listdir("/dev/disk/by-id"):
 			if disk.startswith("ata"):
-				storedhddtemp = hddtemp
 				f = "sata:" + os.path.join("/dev/disk/by-id", disk)
 				process = subprocess.Popen(["/usr/sbin/hddtemp", "-n", f], shell=False, stdout=subprocess.PIPE)
 				hddtemp = int(process.communicate()[0])
