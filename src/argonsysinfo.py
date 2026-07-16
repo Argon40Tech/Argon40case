@@ -7,6 +7,7 @@
 import os
 import time
 import socket
+import subprocess
 
 def argonsysinfo_listcpuusage(sleepsec = 1):
 	outputlist = []
@@ -152,6 +153,20 @@ def argonsysinfo_getip():
 		st.close()
 	return ipaddr
 
+def argonsysinfo_gethddtemp():
+	hddtemp = 0
+	storedhddtemp = 0
+	try:
+		for disk in os.listdir("/dev/disk/by-id"):
+			if disk.startswith("ata"):
+				f = "sata:" + os.path.join("/dev/disk/by-id", disk)
+				process = subprocess.Popen(["/usr/sbin/hddtemp", "-n", f], shell=False, stdout=subprocess.PIPE)
+				hddtemp = int(process.communicate()[0])
+				if hddtemp > storedhddtemp:
+					storedhddtemp = hddtemp
+		return float(storedhddtemp)
+	except:
+		return 0
 
 def argonsysinfo_getrootdev():
 	tmp = os.popen('mount').read()
