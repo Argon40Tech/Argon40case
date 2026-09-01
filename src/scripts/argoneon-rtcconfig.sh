@@ -1,8 +1,17 @@
 #!/bin/bash
 
+if [ -z "$1" ]
+then
+	rtcdaemonname=argoneond
+	rtcconfigfile=/etc/argoneonrtc.conf
+else
+	rtcdaemonname=${1}d
+	rtcconfigfile=/etc/${1}.conf
+fi
+
+
 pythonbin=/usr/bin/python3
-argoneonrtcscript=/etc/argon/argoneond.py
-rtcconfigfile=/etc/argoneonrtc.conf
+argonrtcscript=/etc/argon/$rtcdaemonname.py
 
 CHECKPLATFORM="Others"
 # Check if Raspbian
@@ -10,6 +19,9 @@ grep -q -F 'Raspbian' /etc/os-release &> /dev/null
 if [ $? -eq 0 ]
 then
 	CHECKPLATFORM="Raspbian"
+else
+	# Ubuntu needs elevated access for SMBus
+	pythonbin="sudo /usr/bin/python3"
 fi
 
 
@@ -29,7 +41,7 @@ get_number () {
 		then
 			echo "-1"
 			return
-		fi	
+		fi
 		echo $curnumber
 		return
 	fi
@@ -47,9 +59,9 @@ configure_schedule () {
 		echo "  1. Add Schedule"
 		echo "  or"
 		echo "  Remove Schedule"
-		$pythonbin $argoneonrtcscript GETSCHEDULELIST
+		$pythonbin $argonrtcscript GETSCHEDULELIST
 		echo
-		echo " 99. Exit"
+		echo " 99. Main Menu"
 		echo "  0. Back"
 		#echo "NOTE: You can also edit $rtcconfigfile directly"
 		echo -n "Enter Number:"
@@ -68,7 +80,7 @@ configure_schedule () {
 		elif [ $newmode -gt 1 ]
 		then
 			echo "CONFIRM SCHEDULE REMOVAL"
-			$pythonbin $argoneonrtcscript SHOWSCHEDULE $newmode
+			$pythonbin $argonrtcscript SHOWSCHEDULE $newmode
 			echo -n "Press Y to remove schedule #$newmode:"
 			read -n 1 confirm
 			if [ "$confirm" = "y" ]
@@ -77,8 +89,8 @@ configure_schedule () {
 			fi
 			if [ "$confirm" = "Y" ]
 			then
-				$pythonbin $argoneonrtcscript REMOVESCHEDULE $newmode
-				sudo systemctl restart argoneond.service
+				$pythonbin $argonrtcscript REMOVESCHEDULE $newmode
+				sudo systemctl restart $rtcdaemonname.service
 			fi
 			echo ""
 		fi
@@ -241,7 +253,7 @@ configure_newschedule () {
 			fi
 
 			echo "$minute $hour * * $cronweekday $cmdcode" >> $rtcconfigfile
-			sudo systemctl restart argoneond.service
+			sudo systemctl restart $rtcdaemonname.service
 			subloopflag=0
 		fi
 	done
@@ -303,7 +315,7 @@ configure_newcron () {
 					if [[ $minute -ge 0 && $minute -le 59 ]]
 					then
 						echo "$minute * * * * $cmdcode" >> $rtcconfigfile
-						sudo systemctl restart argoneond.service
+						sudo systemctl restart $rtcdaemonname.service
 						subloopflag=0
 					else
 						echo "Invalid value"
@@ -317,7 +329,7 @@ configure_newcron () {
 					if [[ $minute -ge 0 && $minute -le 59 && $hour -ge 0 && $hour -le 23 ]]
 					then
 						echo "$minute $hour * * * $cmdcode" >> $rtcconfigfile
-						sudo systemctl restart argoneond.service
+						sudo systemctl restart $rtcdaemonname.service
 						subloopflag=0
 					else
 						echo "Invalid value(s)"
@@ -343,7 +355,7 @@ configure_newcron () {
 					if [[ $minute -ge 0 && $minute -le 59 && $hour -ge 0 && $hour -le 23 && $weekday -ge 0 && $weekday -le 6 ]]
 					then
 						echo "$minute $hour * * $weekday $cmdcode" >> $rtcconfigfile
-						sudo systemctl restart argoneond.service
+						sudo systemctl restart $rtcdaemonname.service
 						subloopflag=0
 					else
 						echo "Invalid value(s)"
@@ -364,7 +376,7 @@ configure_newcron () {
 					if [[ $minute -ge 0 && $minute -le 59 && $hour -ge 0 && $hour -le 23 && $monthday -ge 1 && $monthday -le 31 ]]
 					then
 						echo "$minute $hour $monthday * * $cmdcode" >> $rtcconfigfile
-						sudo systemctl restart argoneond.service
+						sudo systemctl restart $rtcdaemonname.service
 						subloopflag=0
 					else
 						echo "Invalid value(s)"
@@ -381,11 +393,11 @@ do
 	echo "----------------------------"
 	echo "Argon RTC Configuration Tool"
 	echo "----------------------------"
-	$pythonbin $argoneonrtcscript GETRTCTIME
+	$pythonbin $argonrtcscript GETRTCTIME
 	echo "Choose from the list:"
 	echo "  1. Update RTC Time"
 	echo "  2. Configure Startup/Shutdown Schedules"
-	echo 
+	echo
 	echo "  0. Exit"
 	echo -n "Enter Number (0-2):"
 
@@ -398,7 +410,7 @@ do
 		if [ $newmode -eq 1 ]
 		then
 			echo "Matching RTC Time to System Time..."
-			$pythonbin $argoneonrtcscript UPDATERTCTIME
+			$pythonbin $argonrtcscript UPDATERTCTIME
 		elif [ $newmode -eq 2 ]
 		then
 			configure_schedule

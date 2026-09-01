@@ -1,12 +1,30 @@
 #!/bin/bash
 
-CHECKPLATFORM="Others"
-# Check if Raspbian
-grep -q -F 'Raspbian' /etc/os-release &> /dev/null
-if [ $? -eq 0 ]
-then
-	CHECKPLATFORM="Raspbian"
+
+if [ -e /boot/firmware/config.txt ] ; then
+  FIRMWARE=/firmware
+else
+  FIRMWARE=
 fi
+CONFIG=/boot${FIRMWARE}/config.txt
+
+CHECKGPIOMODE="libgpiod" # gpiod or rpigpio
+
+# Check if Raspbian
+CHECKPLATFORM="Others"
+if [ -f "/etc/os-release" ]
+then
+	source /etc/os-release
+	if [ "$ID" = "raspbian" ]
+	then
+		CHECKPLATFORM="Raspbian"
+	elif [ "$ID" = "debian" ]
+	then
+		# For backwards compatibility, continue using raspbian
+		CHECKPLATFORM="Raspbian"
+	fi
+fi
+
 
 echo "-----------------------------"
 echo " Argon IR Configuration Tool"
@@ -45,7 +63,7 @@ get_number () {
 		then
 			echo "-1"
 			return
-		fi	
+		fi
 		echo $curnumber
 		return
 	fi
@@ -118,13 +136,12 @@ then
 	irtmpconfigfile=/dev/shm/argonirconfig.txt
 	sudo systemctl stop irexec.service
 	sudo systemctl disable irexec.service
-	sudo pip3 uninstall lirc -y
 	sudo apt-get -y remove lirc
 	sudo rm $irexecshfile
 	sudo rm $irdecodefile
 
-	sudo cat /boot/config.txt | grep -v 'dtoverlay=gpio-ir,gpio_pin=23' > $irtmpconfigfile
-	cat $irtmpconfigfile | sudo tee /boot/config.txt 1> /dev/null
+	sudo cat $CONFIG | grep -v 'dtoverlay=gpio-ir,gpio_pin=23' > $irtmpconfigfile
+	cat $irtmpconfigfile | sudo tee $CONFIG 1> /dev/null
 	sudo rm $irtmpconfigfile
 
 	echo "Uninstall Completed"
@@ -225,9 +242,7 @@ then
 		sudo apt-get -y update
 		sudo apt-get -y install lirc
 
-		sudo pip3 install lirc
-
-		echo "dtoverlay=gpio-ir,gpio_pin=23" | sudo tee -a /boot/config.txt 1> /dev/null
+		echo "dtoverlay=gpio-ir,gpio_pin=23" | sudo tee -a $CONFIG 1> /dev/null
 
 		sudo /usr/share/lirc/lirc-old2new
 
@@ -276,12 +291,14 @@ then
 		echo '' | sudo tee -a $irexecshfile 1> /dev/null
 
 		sudo chmod 755 $irexecshfile
-	fi	
+	fi
 fi
 
-if [ ! -f "$irdecodefile" ]
+if [ "$CHECKGPIOMODE" = "rpigpio" ]
 then
 	sudo wget https://download.argon40.com/argonone-irdecoder.py -O $irdecodefile --quiet
+else
+	sudo wget https://download.argon40.com/scripts/argonone-irdecoder-libgpiod.py -O $irdecodefile --quiet
 fi
 
 sudo python3 $irdecodefile $remotemode
@@ -305,7 +322,10 @@ then
 	echo '        <down>KEY_DOWN</down>' | tee -a $kodilircmapfile 1> /dev/null
 	echo '        <select>KEY_OK</select>' | tee -a $kodilircmapfile 1> /dev/null
 	echo '        <start>KEY_HOME</start>' | tee -a $kodilircmapfile 1> /dev/null
-	echo '        <rootmenu>KEY_MENUBACK</rootmenu>' | tee -a $kodilircmapfile 1> /dev/null
+	# 20240611: User reported mapping is incorrect
+	#echo '        <rootmenu>KEY_MENUBACK</rootmenu>' | tee -a $kodilircmapfile 1> /dev/null
+	echo '        <rootmenu>KEY_MENU</rootmenu>' | tee -a $kodilircmapfile 1> /dev/null
+	echo '        <back>KEY_BACK</back>' | tee -a $kodilircmapfile 1> /dev/null
 	echo '        <volumeplus>KEY_VOLUMEUP</volumeplus>' | tee -a $kodilircmapfile 1> /dev/null
 	echo '        <volumeminus>KEY_VOLUMEDOWN</volumeminus>' | tee -a $kodilircmapfile 1> /dev/null
 	echo '    </remote>' | tee -a $kodilircmapfile 1> /dev/null

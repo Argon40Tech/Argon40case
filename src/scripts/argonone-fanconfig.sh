@@ -1,10 +1,28 @@
 #!/bin/bash
 
 daemonconfigfile=/etc/argononed.conf
+unitconfigfile=/etc/argonunits.conf
+fanmode="CPU"
 
-echo "------------------------------------"
-echo " Argon Fan Speed Configuration Tool"
-echo "------------------------------------"
+if [ "$1" == "hdd" ]
+then
+	daemonconfigfile=/etc/argononed-hdd.conf
+	fanmode="HDD"
+fi
+
+if [ -f "$unitconfigfile" ]
+then
+	. $unitconfigfile
+fi
+
+if [ -z "$temperature" ]
+then
+	temperature="C"
+fi
+
+echo "------------------------------------------"
+echo " Argon Fan Speed Configuration Tool ($fanmode)"
+echo "------------------------------------------"
 echo "WARNING: This will remove existing configuration."
 echo -n "Press Y to continue:"
 read -n 1 confirm
@@ -38,11 +56,12 @@ get_number () {
 		then
 			echo "-1"
 			return
-		elif [ $curnumber -gt 100 ]
+		elif [ $curnumber -gt 212 ]
 		then
+			# 212F = 100C
 			echo "-1"
 			return
-		fi	
+		fi
 		echo $curnumber
 		return
 	fi
@@ -55,8 +74,23 @@ do
 	echo
 	echo "Select fan mode:"
 	echo "  1. Always on"
-	echo "  2. Adjust to temperatures (55C, 60C, and 65C)"
-	echo "  3. Customize behavior"
+	if [ "$fanmode" == "HDD" ]
+	then
+		if [ "$temperature" == "C" ]
+		then
+			echo "  2. Adjust to temperatures (35C, 40C, and 45C)"
+		else
+			echo "  2. Adjust to temperatures (95F, 104F, and 113F)"
+		fi
+	else
+		if [ "$temperature" == "C" ]
+		then
+			echo "  2. Adjust to temperatures (55C, 60C, and 65C)"
+		else
+			echo "  2. Adjust to temperatures (130F, 140F, and 150F)"
+		fi
+	fi
+	echo "  3. Customize temperature cut-offs"
 	echo
 	echo "  0. Exit"
 	echo "NOTE: You can also edit $daemonconfigfile directly"
@@ -69,28 +103,61 @@ do
 	elif [ $newmode -eq 1 ]
 	then
 		echo "#" > $daemonconfigfile
-		echo "# Argon One Fan Speed Configuration" >> $daemonconfigfile
+		echo "# Argon Fan Speed Configuration $fanmode" >> $daemonconfigfile
 		echo "#" >> $daemonconfigfile
 		echo "# Min Temp=Fan Speed" >> $daemonconfigfile
-		echo 1"="100 >> $daemonconfigfile
+
+		errorfanflag=1
+		while [ $errorfanflag -eq 1 ]
+		do
+			echo -n "Please provide fan speed (30-100 only):"
+
+			curfan=$( get_number )
+			if [ $curfan -ge 30 ]
+			then
+				errorfanflag=0
+			elif [ $curfan -gt 100 ]
+			then
+				errorfanflag=0
+			fi
+		done
+
+		echo "1="$curfan >> $daemonconfigfile
 		sudo systemctl restart argononed.service
 		echo "Fan always on."
 	elif [ $newmode -eq 2 ]
 	then
-		echo "Please provide fan speeds for the following temperatures:"
 		echo "#" > $daemonconfigfile
-		echo "# Argon One Fan Speed Configuration" >> $daemonconfigfile
+		echo "# Argon Fan Speed Configuration $fanmode" >> $daemonconfigfile
 		echo "#" >> $daemonconfigfile
 		echo "# Min Temp=Fan Speed" >> $daemonconfigfile
+
+		echo "Please provide fan speeds for the following temperatures:"
 		curtemp=55
-		while [ $curtemp -lt 70 ]
+		maxtemp=70
+		if [ "$fanmode" == "HDD" ]
+		then
+			curtemp=30
+			maxtemp=60
+		fi
+		while [ $curtemp -lt $maxtemp ]
 		do
 			errorfanflag=1
 			while [ $errorfanflag -eq 1 ]
 			do
-				echo -n ""$curtemp"C (0-100 only):"
+				displaytemp=$curtemp
+				if [ "$temperature" == "F" ]
+				then
+					# Convert C to F
+					displaytemp=$((($curtemp*9/5)+32))
+				fi
+				echo -n ""$displaytemp"$temperature (30-100 only):"
+
 				curfan=$( get_number )
-				if [ $curfan -ge 0 ]
+				if [ $curfan -ge 30 ]
+				then
+					errorfanflag=0
+				elif [ $curfan -gt 100 ]
 				then
 					errorfanflag=0
 				fi
@@ -115,13 +182,15 @@ do
 			echo "(You may set a blank value to end configuration)"
 			while [ $errortempflag -eq 1 ]
 			do
-				echo -n "Provide minimum temperature (in Celsius) then [ENTER]:"
+				echo -n "Provide minimum temperature of $fanmode (in $temperature) then [ENTER]:"
+
 				curtemp=$( get_number )
 				if [ $curtemp -ge 0 ]
 				then
 					errortempflag=0
 				elif [ $curtemp -eq -2 ]
 				then
+					# Blank
 					errortempflag=0
 					errorfanflag=0
 					subloopflag=0
@@ -129,13 +198,17 @@ do
 			done
 			while [ $errorfanflag -eq 1 ]
 			do
-				echo -n "Provide fan speed for "$curtemp"C (0-100) then [ENTER]:"
+				echo -n "Provide fan speed for "$curtemp"$temperature (30-100) then [ENTER]:"
 				curfan=$( get_number )
-				if [ $curfan -ge 0 ]
+				if [ $curfan -ge 30 ]
+				then
+					errorfanflag=0
+				elif [ $curfan -gt 100 ]
 				then
 					errorfanflag=0
 				elif [ $curfan -eq -2 ]
 				then
+					# Blank
 					errortempflag=0
 					errorfanflag=0
 					subloopflag=0
@@ -150,11 +223,17 @@ do
 					echo "#" >> $daemonconfigfile
 					echo "# Min Temp=Fan Speed" >> $daemonconfigfile
 				fi
-				echo $curtemp"="$curfan >> $daemonconfigfile
-				
+
+				displaytemp=$curtemp
 				paircounter=$((paircounter+1))
-				
-				echo "* Fan speed will be set to "$curfan" once temperature reaches "$curtemp" C"
+				if [ "$temperature" == "F" ]
+				then
+					# Convert to F to C
+					curtemp=$((($curtemp-32)*5/9))
+				fi
+				echo $curtemp"="$curfan >> $daemonconfigfile
+
+				echo "* Fan speed will be set to "$curfan" once $fanmode temperature reaches "$displaytemp"$temperature"
 				echo
 			fi
 		done

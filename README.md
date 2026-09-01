@@ -1,13 +1,23 @@
 # Argon40 Cases and HATs Scripts
 
 The Argon40 Cases and HATs are the ergonomic and aesthetic case for the Raspberry Pi. This repository provides samples and references on how to customize our scripts and even create your own versions.  You can find out more about it on:
-* [argon40.com](https://www.argon40.com/argon-one-raspberry-pi-4-case.html)
+* [argon40.com](https://argon40.com/collections/raspberry-pi-cases)
 * [raspberrypi.org](https://www.raspberrypi.org/blog/argon-one-raspberry-pi-case/)
 * [Magpi Magazine](https://magpi.raspberrypi.org/articles/argon-one-review)
+* [Tom's Hardware](https://www.tomshardware.com/news/argon-40-releases-argon-one-m2-case-for-the-raspberry-pi)
 
 ## Official Installers
-* [Argon ONE](https://download.argon40.com/argon1.sh)
+* Argon ONE
+	* [Argon ONE](https://download.argon40.com/argon1.sh)
+	* [Argon ONE v1](https://download.argon40.com/argon1v1.sh)
+	* [Argon ONE v5](https://download.argon40.com/argon1v5.sh)
 * [Argon EON](https://download.argon40.com/argoneon.sh)
+* [Argon NEO 5](https://download.argon40.com/argonneo5.sh)
+* [Argon Fat Hat](https://download.argon40.com/argonfanhat.sh)
+* [Argon PWR UPS](https://download.argon40.com/argonpwrups.sh)
+* Argon ONE UP
+	* [Repository](https://github.com/Argon40Tech/Argon-ONE-UP)
+	* [Installer](https://download.argon40.com/argononeup.sh)
 
 
 ## Standard Mechanisms

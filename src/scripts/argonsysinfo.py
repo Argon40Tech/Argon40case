@@ -7,7 +7,6 @@
 import os
 import time
 import socket
-import subprocess
 
 def argonsysinfo_listcpuusage(sleepsec = 1):
 	outputlist = []
@@ -128,17 +127,67 @@ def argonsysinfo_getram():
 		return "0%"
 	return [str(int(100*totalfree/totalram))+"%", str((totalram+512*1024)>>20)+"GB"]
 
-
-def argonsysinfo_gettemp():
+def argonsysinfo_getcputemp():
 	try:
 		tempfp = open("/sys/class/thermal/thermal_zone0/temp", "r")
 		temp = tempfp.readline()
 		tempfp.close()
+		#cval = temp/1000
+		#fval = 32+9*temp/5000
 		return float(int(temp)/1000)
 	except IOError:
 		return 0
-	cval = val/1000
-	fval = 32+9*val/5000
+
+
+def argonsysinfo_getmaxhddtemp():
+	maxtempval = 0
+	try:
+		hddtempobj = argonsysinfo_gethddtemp()
+		for curdev in hddtempobj:
+			if hddtempobj[curdev] > maxtempval:
+				maxtempval = hddtempobj[curdev]
+		return maxtempval
+	except:
+		return maxtempval
+
+def argonsysinfo_gethddtemp():
+	# May 2022: Used smartctl, hddtemp is not available on some platforms
+	hddtempcmd = "/usr/sbin/smartctl"
+	if os.path.exists(hddtempcmd) == False:
+		# Fallback for now
+		hddtempcmd = "/usr/sbin/hddtemp"
+
+	outputobj = {}
+	if os.path.exists(hddtempcmd):
+		try:
+			tmp = os.popen("lsblk | grep -e '0 disk' | awk '{print $1}'").read()
+			alllines = tmp.split("\n")
+			for curdev in alllines:
+				if curdev[0:2] == "sd" or curdev[0:2] == "hd":
+					tempval = argonsysinfo_getdevhddtemp(hddtempcmd,curdev)
+					if tempval > 0:
+						outputobj[curdev] = tempval
+			return outputobj
+		except:
+			return outputobj
+	return outputobj
+
+def argonsysinfo_getdevhddtemp(hddtempcmd, curdev):
+	cmdstr = ""
+	if hddtempcmd == "/usr/sbin/hddtemp":
+		cmdstr = "/usr/sbin/hddtemp -n sata:/dev/"+curdev
+	elif hddtempcmd == "/usr/sbin/smartctl":
+		cmdstr = "/usr/sbin/smartctl -d sat -A /dev/"+curdev+" | grep Temperature_Celsius | awk '{print $10}'"
+
+	tempval = 0
+	if len(cmdstr) > 0:
+		try:
+			temperaturestr = os.popen(cmdstr+" 2>&1").read()
+			tempval = float(temperaturestr)
+		except:
+			tempval = -1
+
+	return tempval
 
 def argonsysinfo_getip():
 	ipaddr = ""
@@ -153,20 +202,6 @@ def argonsysinfo_getip():
 		st.close()
 	return ipaddr
 
-def argonsysinfo_gethddtemp():
-	hddtemp = 0
-	storedhddtemp = 0
-	try:
-		for disk in os.listdir("/dev/disk/by-id"):
-			if disk.startswith("ata"):
-				f = "sata:" + os.path.join("/dev/disk/by-id", disk)
-				process = subprocess.Popen(["/usr/sbin/hddtemp", "-n", f], shell=False, stdout=subprocess.PIPE)
-				hddtemp = int(process.communicate()[0])
-				if hddtemp > storedhddtemp:
-					storedhddtemp = hddtemp
-		return float(storedhddtemp)
-	except:
-		return 0
 
 def argonsysinfo_getrootdev():
 	tmp = os.popen('mount').read()
@@ -191,7 +226,8 @@ def argonsysinfo_listhddusage():
 	raidctr = 0
 	while raidctr < len(raidlist['raidlist']):
 		raiddevlist.append(raidlist['raidlist'][raidctr]['title'])
-		outputobj[raidlist['raidlist'][raidctr]['title']] = {"used":int(raidlist['raidlist'][raidctr]['info']['used']), "total":int(raidlist['raidlist'][raidctr]['info']['size'])}
+		# TODO: May need to use different method for each raid type (i.e. check raidlist['raidlist'][raidctr]['value'])
+		#outputobj[raidlist['raidlist'][raidctr]['title']] = {"used":int(raidlist['raidlist'][raidctr]['info']['used']), "total":int(raidlist['raidlist'][raidctr]['info']['size'])}
 		raidctr = raidctr + 1
 
 	rootdev = argonsysinfo_getrootdev()
@@ -220,13 +256,19 @@ def argonsysinfo_listhddusage():
 				curdev = curdev[tmpidx+1:]
 
 			if curdev in raidlist['hddlist']:
+				# Skip devices that are part of a RAID setup
 				continue
 			elif curdev in raiddevlist:
-				continue
+				# Skip RAID ID that already have size data
+				# (use df information otherwise)
+				if curdev in outputobj:
+					continue
 			elif curdev[0:2] == "sd" or curdev[0:2] == "hd":
 				curdev = curdev[0:-1]
 			else:
 				curdev = curdev[0:-2]
+
+			# Aggregate values (i.e. sda1, sda2 to sda)
 			if curdev in outputobj:
 				outputobj[curdev] = {"used":outputobj[curdev]['used']+int(infolist[2]), "total":outputobj[curdev]['total']+int(infolist[1])}
 			else:
@@ -278,7 +320,7 @@ def argonsysinfo_listraid():
 				if infolist[0] != "Personalities" and infolist[1] == ":":
 					devname = infolist[0]
 					raidtype = infolist[3]
-					raidstatus = infolist[2]
+					#raidstatus = infolist[2]
 					hddctr = 4
 					while hddctr < len(infolist):
 						tmpdevname = infolist[hddctr]
@@ -308,6 +350,7 @@ def argonsysinfo_getraiddetail(devname):
 	active = 0
 	failed = 0
 	spare = 0
+	rebuildstat = ""
 	tmp = os.popen('mdadm -D /dev/'+devname).read()
 	alllines = tmp.split("\n")
 
@@ -329,7 +372,11 @@ def argonsysinfo_getraiddetail(devname):
 				if tmpidx > 0:
 					used = (infolist[1][0:tmpidx])
 			elif infolist[0].lower() == "state":
-				state = infolist[1]
+				tmpidx = infolist[1].rfind(" ") 
+				if tmpidx > 0:
+					state = (infolist[1][tmpidx+1:])
+				else:
+					state = infolist[1]
 			elif infolist[0].lower() == "total devices":
 				total = infolist[1]
 			elif infolist[0].lower() == "active devices":
@@ -340,4 +387,8 @@ def argonsysinfo_getraiddetail(devname):
 				failed = infolist[1]
 			elif infolist[0].lower() == "spare devices":
 				spare = infolist[1]
-	return {"state": state, "raidtype": raidtype, "size": int(size), "used": int(used), "devices": int(total), "active": int(active), "working": int(working), "failed": int(failed), "spare": int(spare)}
+			elif infolist[0].lower() == "rebuild status":
+				tmpidx = infolist[1].find("%") 
+				if tmpidx > 0:
+					rebuildstat = (infolist[1][0:tmpidx])+"%"
+	return {"state": state, "raidtype": raidtype, "size": int(size), "used": int(used), "devices": int(total), "active": int(active), "working": int(working), "failed": int(failed), "spare": int(spare), "rebuildstat": rebuildstat}

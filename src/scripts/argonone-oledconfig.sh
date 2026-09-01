@@ -18,7 +18,7 @@ get_number () {
 		then
 			echo "-1"
 			return
-		fi	
+		fi
 		echo $curnumber
 		return
 	fi
@@ -36,9 +36,6 @@ get_pagename() {
 	elif [ "$1" == "storage" ]
 	then
 		pagename="Storage Utilization"
-	elif [ "$1" == "raid" ]
-	then
-		pagename="RAID Information"
 	elif [ "$1" == "ram" ]
 	then
 		pagename="Available RAM"
@@ -48,13 +45,16 @@ get_pagename() {
 	elif [ "$1" == "ip" ]
 	then
 		pagename="IP Address"
+	elif [ "$1" == "logo1v5" ]
+	then
+		pagename="Logo:One v5"
 	else
 		pagename="Invalid"
 	fi
 }
 
 configure_pagelist () {
-	pagemasterlist="clock cpu storage raid ram temp ip"
+	pagemasterlist="logo1v5 clock cpu storage ram temp ip"
 	newscreenlist="$1"
 	pageloopflag=1
 	while [ $pageloopflag -eq 1 ]
@@ -170,7 +170,7 @@ do
 
 	if [ -z "$screenlist" ]
 	then
-		screenlist="clock ip"
+		screenlist="ip cpu ram"
 		updateconfig=1
 	fi
 
@@ -207,8 +207,8 @@ do
 	echo "  2. Configure Pages"
 	echo "  3. Turn OFF OLED Screen when unchanged after $screensaver secs"
 	echo "  4. Enable OLED Pages: $enabled"
-	echo 
-	echo "  0. Exit"
+	echo
+	echo "  0. Back"
 	echo -n "Enter Number (0-3):"
 
 	newmode=$( get_number )
@@ -252,7 +252,7 @@ do
 			echo
 			echo "Invalid duration"
 			echo
-		fi		
+		fi
 	elif [ $newmode -eq 2 ]
 	then
 		configure_pagelist "$screenlist"

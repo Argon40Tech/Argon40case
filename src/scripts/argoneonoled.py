@@ -10,13 +10,16 @@ import time
 
 # Initialize I2C Bus
 import smbus
-import RPi.GPIO as GPIO
 
-rev = GPIO.RPI_REVISION
-if rev == 2 or rev == 3:
+try:
 	bus=smbus.SMBus(1)
-else:
-	bus=smbus.SMBus(0)
+except Exception:
+	try:
+		# Older version
+		bus=smbus.SMBus(0)
+	except Exception:
+		print("Unable to detect i2c")
+		bus=None
 
 
 OLED_WD=128
@@ -125,6 +128,8 @@ def oled_flushimage(hidescreen = True):
 def oled_flushblock(xoffset, yoffset):
 	yoffset = yoffset>>3
 	blocksize = 32
+	if bus is None:
+		return
 	try:
 		# Set COM-H Addressing
 		bus.write_byte_data(ADDR_OLED, 0, 0x20)
@@ -196,7 +201,7 @@ def oled_writetextaligned(textdata, x, y, boxwidth, alignmode, charwd = 6, mode 
 		leftoffset = (boxwidth-len(textdata)*charwd)
 
 	oled_writetext(textdata, x+leftoffset, y, charwd, mode)
-	
+
 
 def oled_writetext(textdata, x, y, charwd = 6, mode = 0):
 	if charwd < 6:
@@ -266,14 +271,16 @@ def oled_fastwritetext(textdata, x, y, charht, charwd, fontbytes, mode = 0):
 				row = row + 8
 			fontcol = fontcol + 1
 			x = x + 1
-		ctr = ctr + 1	
+		ctr = ctr + 1
 	return
 
 
 def oled_power(turnon = True):
 	cmd = 0xAE
 	if turnon == True:
-			cmd = cmd|1
+		cmd = cmd|1
+	if bus is None:
+		return
 	try:
 		bus.write_byte_data(ADDR_OLED, 0, cmd)
 	except:
@@ -283,7 +290,9 @@ def oled_power(turnon = True):
 def oled_inverse(enable = True):
 	cmd = 0xA6
 	if enable == True:
-			cmd = cmd|1
+		cmd = cmd|1
+	if bus is None:
+		return
 	try:
 		bus.write_byte_data(ADDR_OLED, 0, cmd)
 	except:
@@ -293,7 +302,10 @@ def oled_inverse(enable = True):
 def oled_fullwhite(enable = True):
 	cmd = 0xA4
 	if enable == True:
-			cmd = cmd|1
+		cmd = cmd|1
+	if bus is None:
+		return
+
 	try:
 		bus.write_byte_data(ADDR_OLED, 0, cmd)
 	except:
@@ -302,6 +314,8 @@ def oled_fullwhite(enable = True):
 
 
 def oled_reset():
+	if bus is None:
+		return
 	try:
 		# Set COM-H Addressing
 		bus.write_byte_data(ADDR_OLED, 0, 0x20)
